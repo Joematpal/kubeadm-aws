@@ -8,25 +8,21 @@ systemctl disable snapd snapd.socket lxcfs snap.amazon-ssm-agent.amazon-ssm-agen
 swapoff -a
 sed -i '/swap/d' /etc/fstab
 
-# Install K8S, kubeadm and Docker 17.03 (most recent supported version for Kubernetes)
+# Install K8S, kubeadm and Docker
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-wget http://launchpadlibrarian.net/361362020/docker.io_17.03.2-0ubuntu5_amd64.deb
-dpkg -i docker.io_17.03.2-0ubuntu5_amd64.deb
-apt-get install -fy
-apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k8sversion}-00
+apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k8sversion}-00 docker.io
 apt-mark hold kubelet kubeadm kubectl docker.io
 
 # Point Docker at big ephemeral drive and turn on log rotation (messy because data-root option didn't exist in 17.03)
 systemctl stop docker
 mkdir /mnt/docker
 chmod 711 /mnt/docker
-rm -rf /var/lib/docker
-ln -s /mnt/docker /var/lib/docker
 cat <<EOF > /etc/docker/daemon.json
 {
+    "data-root": "/mnt/docker",
     "log-driver": "json-file",
     "log-opts": {
         "max-size": "10m",

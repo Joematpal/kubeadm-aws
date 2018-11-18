@@ -8,15 +8,12 @@ systemctl disable snapd snapd.socket lxcfs snap.amazon-ssm-agent.amazon-ssm-agen
 swapoff -a
 sed -i '/swap/d' /etc/fstab
 
-# Install K8S, kubeadm and Docker 17.03 (most recent supported version for Kubernetes)
+# Install K8S, kubeadm and Docker
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-wget http://launchpadlibrarian.net/361362020/docker.io_17.03.2-0ubuntu5_amd64.deb
-dpkg -i docker.io_17.03.2-0ubuntu5_amd64.deb
-apt-get install -fy
-apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k8sversion}-00 awscli jq
+apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k8sversion}-00 awscli jq docker.io
 apt-mark hold kubelet kubeadm kubectl docker.io
 
 # Install etcdctl for the version of etcd we're running
@@ -30,10 +27,9 @@ rm -rf etcd*
 systemctl stop docker
 mkdir /mnt/docker
 chmod 711 /mnt/docker
-rm -rf /var/lib/docker
-ln -s /mnt/docker /var/lib/docker
 cat <<EOF > /etc/docker/daemon.json
 {
+    "data-root": "/mnt/docker",
     "log-driver": "json-file",
     "log-opts": {
         "max-size": "10m",
@@ -111,7 +107,7 @@ mkdir -p /home/ubuntu/.kube && cp -i /etc/kubernetes/admin.conf /home/ubuntu/.ku
 echo 'source <(kubectl completion bash)' >> /home/ubuntu/.bashrc
 
 if [ -f /tmp/fresh-cluster ]; then
-  su -c 'kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.10.0/Documentation/kube-flannel.yml' ubuntu
+  su -c 'kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/13a990bb716c82a118b8e825b78189dcfbfb2f1e/Documentation/kube-flannel.yml' ubuntu
   mkdir /tmp/manifests
   aws s3 sync s3://${s3bucket}/manifests/ /tmp/manifests
   su -c 'kubectl apply -n kube-system -f /tmp/manifests/' ubuntu
