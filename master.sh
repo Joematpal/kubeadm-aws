@@ -50,24 +50,25 @@ mkdir /mnt/kubelet
 echo 'KUBELET_EXTRA_ARGS="--root-dir=/mnt/kubelet --cloud-provider=aws"' > /etc/default/kubelet
 
 cat >init-config.yaml <<EOF
-apiVersion: kubeadm.k8s.io/v1alpha2
-kind: MasterConfiguration
-controllerManagerExtraArgs:
-  cloud-provider: aws
-apiServerExtraArgs:
-  cloud-provider: aws
+apiVersion: kubeadm.k8s.io/v1alpha3
+kind: InitConfiguration
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
   token: "${k8stoken}"
   ttl: "0"
-  usages:
-  - signing
-  - authentication
-networking:
-  podSubnet: "10.244.0.0/16"
 nodeRegistration:
   name: "$(hostname -f)"
+  taints: []
+---
+apiVersion: kubeadm.k8s.io/v1alpha3
+kind: ClusterConfiguration
+apiServerExtraArgs:
+  cloud-provider: aws
+controllerManagerExtraArgs:
+  cloud-provider: aws
+networking:
+  podSubnet: 10.244.0.0/16
 EOF
 
 # Check if there is an etcd backup on the s3 bucket and restore from it if there is
@@ -112,9 +113,6 @@ if [ -f /tmp/fresh-cluster ]; then
   aws s3 sync s3://${s3bucket}/manifests/ /tmp/manifests
   su -c 'kubectl apply -n kube-system -f /tmp/manifests/' ubuntu
 fi
-
-# Allow pod scheduling on the master (no recommended but we're doing it anyway :D)
-su -c 'kubectl taint nodes --all node-role.kubernetes.io/master-' ubuntu
 
 # Set up backups if they have been enabled
 if [[ ! -z "${s3bucket}" ]]; then
