@@ -9,7 +9,7 @@ Current features:
 * Automatic backup and recovery. So if your master gets terminated, when the replacement is provisioned by AWS it will pick up where the old one left off without you doing anything. 😁
 * Completely automated provisioning through Terraform and Bash.
 * Variables for many things including number of workers (requested through spot fleet) and EC2 instance type.
-* [External DNS](https://github.com/kubernetes-incubator/external-dns) as a cheap ELB alternative.
+* [External DNS](https://github.com/kubernetes-incubator/external-dns) and [Nginx Ingess](https://github.com/kubernetes/ingress-nginx) as a cheap ELB alternative.
 * Persistent Volumes using GP2 storage on EBS.
 
 **Please use the releases rather than pulling from master. Master may be untested at any given point in time.**
@@ -38,7 +38,8 @@ Optional Variables:
 * `cluster-name` - Used for naming the created AWS resources (k8s by default)
 * `backup-enabled` - Set to "0" to disable the automatic etcd backups (1 by default)
 * `backup-cron-expression` - A cron expression to use for the automatic etcd backups (`*/15 * * * *` by default)
-* `external-dns-enabled` - Set to "0" to disable the pre-requisites for ExternalDNS (1 by default)
+* `external-dns-enabled` - Set to "0" to disable ExternalDNS (1 by default)
+* `nginx-ingress-enabled` - Set to "0" to disable Nginx Ingress (1 by default)
 
 ### Contributing
 

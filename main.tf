@@ -123,6 +123,26 @@ resource "aws_security_group_rule" "allow_k8s_from_admin" {
   security_group_id = "${aws_security_group.kubernetes.id}"
 }
 
+resource "aws_security_group_rule" "allow_https_from_web" {
+  type            = "ingress"
+  from_port       = 443
+  to_port         = 443
+  protocol        = "tcp"
+  cidr_blocks     = ["0.0.0.0/0"]
+
+  security_group_id = "${aws_security_group.kubernetes.id}"
+}
+
+resource "aws_security_group_rule" "allow_http_from_web" {
+  type            = "ingress"
+  from_port       = 80
+  to_port         = 80
+  protocol        = "tcp"
+  cidr_blocks     = ["0.0.0.0/0"]
+
+  security_group_id = "${aws_security_group.kubernetes.id}"
+}
+
 resource "aws_security_group_rule" "allow_all_out" {
   type            = "egress"
   from_port       = 0
@@ -153,6 +173,7 @@ resource "aws_s3_bucket" "s3-bucket" {
 }
 
 resource "aws_s3_bucket_object" "external-dns-manifest" {
+  count  = "${var.external-dns-enabled}"
   bucket = "${aws_s3_bucket.s3-bucket.id}"
   key    = "manifests/external-dns.yaml"
   source = "manifests/external-dns.yaml"
@@ -164,6 +185,14 @@ resource "aws_s3_bucket_object" "ebs-storage-class-manifest" {
   key    = "manifests/ebs-storage-class.yaml"
   source = "manifests/ebs-storage-class.yaml"
   etag   = "${md5(file("manifests/ebs-storage-class.yaml"))}"
+}
+
+resource "aws_s3_bucket_object" "nginx-ingress-manifest" {
+  count  = "${var.nginx-ingress-enabled}"
+  bucket = "${aws_s3_bucket.s3-bucket.id}"
+  key    = "manifests/nginx-ingress-mandatory.yaml"
+  source = "manifests/nginx-ingress-mandatory.yaml"
+  etag   = "${md5(file("manifests/nginx-ingress-mandatory.yaml"))}"
 }
 
 data "template_file" "master-userdata" {
