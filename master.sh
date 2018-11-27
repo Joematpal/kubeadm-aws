@@ -23,7 +23,7 @@ tar xvf "etcd-v$${ETCD_VERSION}-linux-amd64.tar.gz"
 mv "etcd-v$${ETCD_VERSION}-linux-amd64/etcdctl" /usr/local/bin/
 rm -rf etcd*
 
-# Point Docker at big ephemeral drive and turn on log rotation (messy because data-root option didn't exist in 17.03)
+# Point Docker at big ephemeral drive and turn on log rotation
 systemctl stop docker
 mkdir /mnt/docker
 chmod 711 /mnt/docker

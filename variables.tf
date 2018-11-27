@@ -73,9 +73,14 @@ variable "worker-spot-price" {
   description = "The maximum spot bid for worker nodes"
 }
 
-variable "worker-count" {
+variable "min-worker-count" {
   default = "1"
-  description = "How many worker nodes to request via Spot Fleet"
+  description = "The minimum worker node count"
+}
+
+variable "max-worker-count" {
+  default = "1"
+  description = "The maximum worker node count"
 }
 
 variable "backup-enabled" {
@@ -96,4 +101,9 @@ variable "external-dns-enabled" {
 variable "nginx-ingress-enabled" {
   default = "1"
   description = "Whether or not to enable nginx ingress. (1 for enabled, 0 for disabled)"
+}
+
+variable "cluster-autoscaler-enabled" {
+  default = "0"
+  description = "Whether or not to enable the cluster autoscaler. (1 for enabled, 0 for disabled)"
 }

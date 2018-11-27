@@ -25,6 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 */
 
 provider "aws" {
+  version    = "~> 1.48"
   access_key = "${var.access_key}"
   secret_key = "${var.secret_key}"
   region     = "${var.region}"
@@ -195,6 +196,21 @@ resource "aws_s3_bucket_object" "nginx-ingress-manifest" {
   etag   = "${md5(file("manifests/nginx-ingress-mandatory.yaml"))}"
 }
 
+data "template_file" "cluster-autoscaler-manifest" {
+  template = "${file("manifests/cluster-autoscaler-autodiscover.yaml.tmpl")}"
+  vars {
+    cluster_name = "${var.cluster-name}"
+    cluster_region = "${var.region}"
+  }
+}
+resource "aws_s3_bucket_object" "cluster-autoscaler-manifest" {
+  count  = "${var.cluster-autoscaler-enabled}"
+  bucket = "${aws_s3_bucket.s3-bucket.id}"
+  key    = "manifests/cluster-autoscaler-autodiscover.yaml"
+  content = "${data.template_file.cluster-autoscaler-manifest.rendered}"
+  etag   = "${md5(data.template_file.cluster-autoscaler-manifest.rendered)}"
+}
+
 data "template_file" "master-userdata" {
   template = "${file("master.sh")}"
 
@@ -255,7 +271,7 @@ resource "aws_iam_role_policy_attachment" "policy" {
 resource "aws_iam_policy" "cluster-policy" {
   name        = "${var.cluster-name}-cluster-policy"
   path        = "/"
-  description = "Polcy for ${var.cluster-name} cluster to allow dynamic provisioning of EBS persistent volumes"
+  description = "Policy for ${var.cluster-name} cluster to allow dynamic provisioning of EBS persistent volumes"
 
   policy = <<EOF
 {
@@ -284,6 +300,39 @@ resource "aws_iam_policy" "cluster-policy" {
     ]
 }
 EOF
+}
+
+resource "aws_iam_policy" "autoscaling" {
+  count       = "${var.cluster-autoscaler-enabled}"
+  name        = "${var.cluster-name}-autoscaling-policy"
+  path        = "/"
+  description = "Policy for ${var.cluster-name} cluster to allow cluster autoscaling to work"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeTags",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "autoscaling" {
+  count      = "${var.cluster-autoscaler-enabled}"
+  role       = "${aws_iam_role.role.name}"
+  policy_arn = "${aws_iam_policy.autoscaling.arn}"
 }
 
 resource "aws_iam_role_policy_attachment" "cluster-policy" {
@@ -375,71 +424,65 @@ resource "aws_spot_instance_request" "master" {
     Name = "${var.cluster-name}-master"
     Environment = "${var.cluster-name}"
   }
-}
 
-# Spot fleet for workers
-# This role grants the Spot fleet permission to terminate Spot instances on your behalf when you cancel its Spot fleet request using CancelSpotFleetRequests or when the Spot fleet request expires, if you set terminateInstancesWithExpiration.
-resource "aws_iam_policy_attachment" "fleet" {
-  name       = "${var.cluster-name}-spot-fleet"
-  roles      = ["${aws_iam_role.fleet.name}"]
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetRole"
-}
-# This role allows tagging of spots
-resource "aws_iam_policy_attachment" "fleet-tagging" {
-  name       = "${var.cluster-name}-spot-fleet-tagging"
-  roles      = ["${aws_iam_role.fleet.name}"]
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
-}
-
-resource "aws_iam_role" "fleet" {
-  name = "${var.cluster-name}-spot-fleet"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2008-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": [
-          "spotfleet.amazonaws.com",
-          "ec2.amazonaws.com"
-        ]
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_spot_fleet_request" "worker" {
-  iam_fleet_role                      = "${aws_iam_role.fleet.arn}"
-  target_capacity                     = "${var.worker-count}"
-  terminate_instances_with_expiration = true
-  replace_unhealthy_instances         = true
-  excess_capacity_termination_policy  = "Default" # Terminate instances if the fleet is too big
-  valid_until                         = "2030-12-25T12:00:00Z"
-
-  launch_specification {
-    ami                    = "${data.aws_ami.latest_ami.id}"
-    instance_type          = "${var.worker-instance-type}"
-    ebs_optimized          = false
-    weighted_capacity      = 1 # Says that this instance type has 1 CPU
-    spot_price             = "${var.worker-spot-price}"
-    subnet_id              = "${aws_subnet.public.id}"
-    vpc_security_group_ids = ["${aws_security_group.kubernetes.id}"]
-    iam_instance_profile   = "${aws_iam_instance_profile.profile.name}"
-    key_name               = "${var.k8s-ssh-key}"
-    user_data              = "${data.template_file.worker-userdata.rendered}"
-    tags = "${
-      map(
-       "Name", "${var.cluster-name}-worker",
-       "Environment", "${var.cluster-name}",
-       "kubernetes.io/cluster/${var.cluster-name}", "owned",
-      )
-    }"
+  lifecycle {
+    ignore_changes = [
+      "ami"
+    ]
   }
-  depends_on = ["aws_iam_policy_attachment.fleet", "aws_spot_instance_request.master"]
+}
+
+# Spot ASG for workers
+resource "aws_launch_template" "worker" {
+  iam_instance_profile        = { name = "${aws_iam_instance_profile.profile.name}" }
+  image_id                    = "${data.aws_ami.latest_ami.id}"
+  name                        = "${var.cluster-name}-worker"
+  vpc_security_group_ids      = ["${aws_security_group.kubernetes.id}"]
+  key_name                    = "${var.k8s-ssh-key}"
+  instance_type               = "${var.worker-instance-type}"
+  user_data                   = "${base64encode(data.template_file.worker-userdata.rendered)}"
+  ebs_optimized               = false
+  instance_market_options {
+    market_type = "spot"
+    spot_options {
+      max_price = "${var.worker-spot-price}"
+    }
+  }
+}
+
+resource "aws_autoscaling_group" "worker" {
+  max_size             = "${var.max-worker-count}"
+  min_size             = "${var.min-worker-count}"
+  name                 = "${var.cluster-name}-worker"
+  vpc_zone_identifier  = ["${aws_subnet.public.id}"]
+
+  launch_template {
+    id = "${aws_launch_template.worker.id}"
+    version = "$$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.cluster-name}-worker"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = "${var.cluster-name}"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "kubernetes.io/cluster/${var.cluster-name}"
+    value               = "owned"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/enabled"
+    value               = "true"
+    propagate_at_launch = true
+  }
 }
 

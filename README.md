@@ -8,8 +8,9 @@ Current features:
 
 * Automatic backup and recovery. So if your master gets terminated, when the replacement is provisioned by AWS it will pick up where the old one left off without you doing anything. 😁
 * Completely automated provisioning through Terraform and Bash.
-* Variables for many things including number of workers (requested through spot fleet) and EC2 instance type.
+* Variables for many things including number of workers (requested through an auto-scaling group) and EC2 instance type.
 * [External DNS](https://github.com/kubernetes-incubator/external-dns) and [Nginx Ingess](https://github.com/kubernetes/ingress-nginx) as a cheap ELB alternative.
+* Auto Scaling of worker nodes, if you enable the [Cluster AutoScaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
 * Persistent Volumes using GP2 storage on EBS.
 
 **Please use the releases rather than pulling from master. Master may be untested at any given point in time.**
@@ -28,7 +29,8 @@ Current features:
 
 Optional Variables:
 
-* `worker-count` - How many worker nodes to request via Spot Fleet (1 by default)
+* `min-worker-count` - The minimum size of the worker node Auto-Scaling Group (1 by default)
+* `max-worker-count` - The maximum size of the worker node Auto-Scaling Group (1 by default)
 * `region` - Which AWS region to use (us-east-1 by default)
 * `kubernetes-version` - Which Kubernetes/kubeadm version to install (1.11.3 by default)
 * `master-instance-type` - Which EC2 instance type to use for the master node (m1.small by default)
@@ -40,6 +42,7 @@ Optional Variables:
 * `backup-cron-expression` - A cron expression to use for the automatic etcd backups (`*/15 * * * *` by default)
 * `external-dns-enabled` - Set to "0" to disable ExternalDNS (1 by default)
 * `nginx-ingress-enabled` - Set to "0" to disable Nginx Ingress (1 by default)
+* `cluster-autoscaler-enabled` - Set to "1" to enable the cluster autoscaler (0 by default)
 
 ### Contributing
 

@@ -16,7 +16,7 @@ apt-get update
 apt-get install -y kubelet=${k8sversion}-00 kubeadm=${k8sversion}-00 kubectl=${k8sversion}-00 docker.io
 apt-mark hold kubelet kubeadm kubectl docker.io
 
-# Point Docker at big ephemeral drive and turn on log rotation (messy because data-root option didn't exist in 17.03)
+# Point Docker at big ephemeral drive and turn on log rotation
 systemctl stop docker
 mkdir /mnt/docker
 chmod 711 /mnt/docker
